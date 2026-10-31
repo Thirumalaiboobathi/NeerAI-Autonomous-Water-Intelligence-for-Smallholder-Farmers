@@ -1,0 +1,68 @@
+[
+  {
+    "id": "paddy_today_uncertain_rain",
+    "query": "Should I irrigate my paddy field today?",
+    "weather": "uncertain_rain",
+    "expect": {"tools": ["load_farm_context", "fetch_weather_forecast", "compute_crop_water_requirements", "allocate_water_budget", "generate_irrigation_decision"],
+               "budget_respected": true, "weather_labelled_simulated": true, "language": "en",
+               "actions": {"paddy": ["IRRIGATE_NOW", "PARTIAL_IRRIGATION", "PRIORITIZE_FIELD"]}}
+  },
+  {
+    "id": "heavy_rain_delays_paddy",
+    "query": "Should I irrigate my paddy field today?",
+    "weather": "heavy_rain",
+    "water_litres": 2000000,
+    "expect": {"budget_respected": true, "actions": {"paddy": ["DELAY_AND_MONITOR"]}}
+  },
+  {
+    "id": "scarcity_400m3",
+    "query": "I have only 400 m3 of water. Which field should I prioritize?",
+    "weather": "dry",
+    "expect": {"tools": ["set_available_water", "allocate_water_budget"], "budget_respected": true, "available_litres": 400000,
+               "scarcity": true, "has_action": "PRIORITIZE_FIELD", "actions": {"groundnut": ["PRIORITIZE_FIELD"]}}
+  },
+  {
+    "id": "scarcity_3000_litres",
+    "query": "I have only 3,000 litres of water. Which field should I prioritize?",
+    "weather": "dry",
+    "expect": {"budget_respected": true, "available_litres": 3000, "scarcity": true}
+  },
+  {
+    "id": "plenty_of_water",
+    "query": "Should I irrigate today?",
+    "weather": "dry",
+    "water_litres": 5000000,
+    "expect": {"budget_respected": true, "scarcity": false, "actions": {"paddy": ["IRRIGATE_NOW"], "groundnut": ["IRRIGATE_NOW"]}}
+  },
+  {
+    "id": "heatwave_scarcity",
+    "query": "Should I irrigate today?",
+    "weather": "heatwave",
+    "expect": {"budget_respected": true, "scarcity": true, "heat_risk": "high"}
+  },
+  {
+    "id": "tamil_explanation",
+    "query": "Explain my water plan in Tamil.",
+    "weather": "uncertain_rain",
+    "expect": {"language": "ta", "tamil_text": true, "numbers_consistent": true, "tools": ["compose_farmer_message"]}
+  },
+  {
+    "id": "delay_one_day",
+    "query": "What happens if I delay irrigation by one day?",
+    "weather": "dry",
+    "expect": {"tools": ["simulate_scenarios"], "scenario_names": ["delayed_irrigation"], "budget_respected": true}
+  },
+  {
+    "id": "rain_impact",
+    "query": "Will tomorrow's rain affect my irrigation plan?",
+    "weather": "uncertain_rain",
+    "expect": {"tools": ["simulate_scenarios"], "scenario_names": ["unexpected_rain", "dry_spell"], "weather_labelled_simulated": true}
+  },
+  {
+    "id": "missing_water_asks_question",
+    "query": "Should I irrigate today?",
+    "weather": "dry",
+    "water_litres": null,
+    "expect": {"headline_action": "INSUFFICIENT_DATA", "asks_question": true, "no_allocation": true}
+  }
+]

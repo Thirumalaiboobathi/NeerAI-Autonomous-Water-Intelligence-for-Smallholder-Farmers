@@ -1,0 +1,47 @@
+{
+  "_meta": {
+    "note": "SAMPLE DATA for demonstration. Village names, areas, soil moisture and water volumes are illustrative, not real farmer records. Weather in demo mode is deterministic simulated data.",
+    "demo_farmer": {"name": "Demo Farmer (Murugan)", "preferred_language": "ta"}
+  },
+  "farms": [
+    {
+      "key": "madurai",
+      "farm": {
+        "farmer_name": "Murugan (demo)", "farm_name": "Sample farm - Melur, Madurai",
+        "village": "Sample village near Melur", "district": "Madurai",
+        "latitude": 10.0306, "longitude": 78.3376, "water_source": "borewell",
+        "water_available_litres": 700000, "water_is_estimate": true, "is_demo": true
+      },
+      "fields": [
+        {"name": "Paddy plot (நெல்)", "area": 1.0, "area_unit": "ha", "crop": "paddy", "variety": "ADT 43",
+         "stage": "development", "soil_type": "clay_loam", "irrigation_method": "flood", "days_since_irrigation": 3, "sowing_date_offset_days": -35},
+        {"name": "Groundnut plot (நிலக்கடலை)", "area": 0.6, "area_unit": "ha", "crop": "groundnut", "variety": "TMV 7",
+         "stage": "mid", "soil_type": "red_sandy_loam", "irrigation_method": "furrow", "soil_moisture_pct": 11.0, "sowing_date_offset_days": -48},
+        {"name": "Ragi plot (கேழ்வரகு)", "area": 0.4, "area_unit": "ha", "crop": "ragi", "variety": "CO 15",
+         "stage": "late", "soil_type": "red_sandy_loam", "irrigation_method": "sprinkler", "days_since_irrigation": 4, "sowing_date_offset_days": -90}
+      ]
+    },
+    {
+      "key": "theni",
+      "farm": {
+        "farmer_name": "Selvi (demo)", "farm_name": "Sample drip farm - Theni",
+        "village": "Sample village near Periyakulam", "district": "Theni",
+        "latitude": 10.1200, "longitude": 77.5450, "water_source": "open well",
+        "water_available_litres": 150000, "water_is_estimate": true, "is_demo": true
+      },
+      "fields": [
+        {"name": "Banana (வாழை)", "area": 0.8, "area_unit": "ha", "crop": "banana", "stage": "mid",
+         "soil_type": "loam", "irrigation_method": "drip", "days_since_irrigation": 2},
+        {"name": "Tomato (தக்காளி)", "area": 0.5, "area_unit": "acre", "crop": "tomato", "stage": "development",
+         "soil_type": "red_sandy_loam", "irrigation_method": "drip", "days_since_irrigation": 2}
+      ]
+    }
+  ],
+  "chat_examples": [
+    "Should I irrigate my paddy field today?",
+    "I have only 400 m3 of water. Which field should I prioritize?",
+    "Will tomorrow's rain affect my irrigation plan?",
+    "Explain my water plan in Tamil.",
+    "What happens if I delay irrigation by one day?"
+  ]
+}

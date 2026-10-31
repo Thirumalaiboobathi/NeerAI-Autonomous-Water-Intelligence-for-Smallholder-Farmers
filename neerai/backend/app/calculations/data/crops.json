@@ -1,0 +1,81 @@
+{
+  "_meta": {
+    "note": "SAMPLE crop parameters adapted from FAO Irrigation & Drainage Paper 56 (Table 12 / Table 22) for demonstration. Kc, root depth and depletion fraction vary with variety, season and location. Validate with local agronomists before operational use. All values are configurable.",
+    "stages": ["initial", "development", "mid", "late"]
+  },
+  "crops": {
+    "paddy": {
+      "name_en": "Paddy (rice)", "name_ta": "நெல்",
+      "kc": {"initial": 1.05, "development": 1.10, "mid": 1.20, "late": 0.90},
+      "root_depth_m": {"initial": 0.20, "development": 0.30, "mid": 0.40, "late": 0.40},
+      "p": 0.20,
+      "ponded": true, "ponded_buffer_mm": 50, "ponded_trigger_mm": 30,
+      "critical_stages": ["development", "mid"],
+      "priority_weight": 1.0,
+      "baseline_depth_mm": 60, "baseline_interval_days": 3
+    },
+    "groundnut": {
+      "name_en": "Groundnut", "name_ta": "நிலக்கடலை",
+      "kc": {"initial": 0.40, "development": 0.75, "mid": 1.15, "late": 0.60},
+      "root_depth_m": {"initial": 0.25, "development": 0.40, "mid": 0.50, "late": 0.50},
+      "p": 0.50,
+      "critical_stages": ["mid"],
+      "priority_weight": 1.1,
+      "baseline_depth_mm": 40, "baseline_interval_days": 4
+    },
+    "maize": {
+      "name_en": "Maize", "name_ta": "மக்காச்சோளம்",
+      "kc": {"initial": 0.30, "development": 0.75, "mid": 1.20, "late": 0.50},
+      "root_depth_m": {"initial": 0.30, "development": 0.60, "mid": 0.90, "late": 0.90},
+      "p": 0.55,
+      "critical_stages": ["mid"],
+      "priority_weight": 1.1,
+      "baseline_depth_mm": 50, "baseline_interval_days": 5
+    },
+    "sugarcane": {
+      "name_en": "Sugarcane", "name_ta": "கரும்பு",
+      "kc": {"initial": 0.40, "development": 0.85, "mid": 1.25, "late": 0.75},
+      "root_depth_m": {"initial": 0.40, "development": 0.80, "mid": 1.20, "late": 1.20},
+      "p": 0.65,
+      "critical_stages": ["development"],
+      "priority_weight": 1.2,
+      "baseline_depth_mm": 60, "baseline_interval_days": 6
+    },
+    "cotton": {
+      "name_en": "Cotton", "name_ta": "பருத்தி",
+      "kc": {"initial": 0.35, "development": 0.75, "mid": 1.15, "late": 0.70},
+      "root_depth_m": {"initial": 0.30, "development": 0.70, "mid": 1.00, "late": 1.00},
+      "p": 0.65,
+      "critical_stages": ["mid"],
+      "priority_weight": 1.0,
+      "baseline_depth_mm": 50, "baseline_interval_days": 7
+    },
+    "tomato": {
+      "name_en": "Tomato", "name_ta": "தக்காளி",
+      "kc": {"initial": 0.60, "development": 0.85, "mid": 1.15, "late": 0.80},
+      "root_depth_m": {"initial": 0.25, "development": 0.45, "mid": 0.70, "late": 0.70},
+      "p": 0.40,
+      "critical_stages": ["mid"],
+      "priority_weight": 1.2,
+      "baseline_depth_mm": 35, "baseline_interval_days": 3
+    },
+    "banana": {
+      "name_en": "Banana", "name_ta": "வாழை",
+      "kc": {"initial": 0.50, "development": 0.80, "mid": 1.10, "late": 1.00},
+      "root_depth_m": {"initial": 0.30, "development": 0.50, "mid": 0.70, "late": 0.70},
+      "p": 0.35,
+      "critical_stages": ["development", "mid"],
+      "priority_weight": 1.2,
+      "baseline_depth_mm": 45, "baseline_interval_days": 3
+    },
+    "ragi": {
+      "name_en": "Finger millet (ragi)", "name_ta": "கேழ்வரகு",
+      "kc": {"initial": 0.30, "development": 0.65, "mid": 1.00, "late": 0.30},
+      "root_depth_m": {"initial": 0.25, "development": 0.45, "mid": 0.60, "late": 0.60},
+      "p": 0.55,
+      "critical_stages": ["mid"],
+      "priority_weight": 0.9,
+      "baseline_depth_mm": 35, "baseline_interval_days": 7
+    }
+  }
+}

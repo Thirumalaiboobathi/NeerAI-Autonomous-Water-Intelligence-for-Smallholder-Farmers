@@ -1,0 +1,19 @@
+{
+  "_meta": {
+    "note": "SAMPLE soil hydraulic parameters (volumetric water content, m3/m3) typical of textbook ranges (FAO-56 Table 19). Local soils vary; farmer-provided soil moisture readings override estimates."
+  },
+  "soils": {
+    "sandy":      {"name_en": "Sandy", "name_ta": "மணல் மண்", "fc": 0.12, "wp": 0.05, "percolation_mm_day": 8.0},
+    "red_sandy_loam": {"name_en": "Red sandy loam", "name_ta": "செம்மண்", "fc": 0.20, "wp": 0.10, "percolation_mm_day": 6.0},
+    "loam":       {"name_en": "Loam", "name_ta": "வண்டல் மண்", "fc": 0.27, "wp": 0.12, "percolation_mm_day": 4.0},
+    "clay_loam":  {"name_en": "Clay loam", "name_ta": "களிமண் கலந்த வண்டல்", "fc": 0.32, "wp": 0.17, "percolation_mm_day": 3.0},
+    "black_clay": {"name_en": "Black cotton / clay", "name_ta": "கரிசல் மண்", "fc": 0.38, "wp": 0.22, "percolation_mm_day": 2.0}
+  },
+  "methods": {
+    "flood":     {"name_en": "Flood / canal", "name_ta": "வாய்க்கால் பாசனம்", "efficiency": 0.65},
+    "furrow":    {"name_en": "Furrow", "name_ta": "சால் பாசனம்", "efficiency": 0.60},
+    "awd":       {"name_en": "Alternate wetting & drying", "name_ta": "மாற்று ஈரம்-உலர்வு", "efficiency": 0.65},
+    "sprinkler": {"name_en": "Sprinkler", "name_ta": "தெளிப்பு நீர்ப்பாசனம்", "efficiency": 0.75},
+    "drip":      {"name_en": "Drip", "name_ta": "சொட்டு நீர்ப்பாசனம்", "efficiency": 0.90}
+  }
+}

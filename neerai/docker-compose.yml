@@ -1,0 +1,13 @@
+services:
+  backend:
+    build: { context: ., dockerfile: backend/Dockerfile }
+    env_file: [{ path: .env, required: false }]
+    environment: { NEERAI_AGENT_MODE: "${NEERAI_AGENT_MODE:-demo}" }
+    volumes: ["neerai-data:/data"]
+    ports: ["8000:8000"]
+  frontend:
+    build: { context: ., dockerfile: frontend/Dockerfile }
+    depends_on: [backend]
+    ports: ["8080:80"]
+volumes:
+  neerai-data:
