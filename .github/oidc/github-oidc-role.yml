@@ -26,6 +26,21 @@ Parameters:
       IAM support for these GitHub claim keys was not verified against a primary AWS source when this template was written;
       if AssumeRoleWithWebIdentity is denied for a legitimate run, redeploy with 'false' (the environment-name condition and
       the GitHub environment's 'deployment branches: main only' setting still apply).
+  PinDevWorkflowClaims:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'true'
+    Description: >
+      Same as PinWorkflowClaims but for the dev role only. AWS documents only aud, sub and amr as condition keys for the
+      GitHub provider, and a pinned dev role was denied at sign-in (CloudTrail AccessDenied), so dev runs with 'false'.
+      The prod role keeps following PinWorkflowClaims.
+  DevSubjectRepo:
+    Type: String
+    Default: ''
+    AllowedPattern: '^([A-Za-z0-9_.-]+(@[0-9]+)?/[A-Za-z0-9_.-]+(@[0-9]+)?)?$'
+    Description: >
+      Dev role only. Repository part of the OIDC 'sub' claim exactly as GitHub issues it. Repositories with immutable
+      subjects issue owner@ownerId/repo@repoId (verified from a real token); empty = use GitHubOrgRepo.
   CreateOidcProvider:
     Type: String
     AllowedValues: ['true', 'false']
@@ -37,6 +52,8 @@ Parameters:
 Conditions:
   MakeProvider: !Equals [!Ref CreateOidcProvider, 'true']
   Pin: !Equals [!Ref PinWorkflowClaims, 'true']
+  DevSubjectSet: !Not [!Equals [!Ref DevSubjectRepo, '']]
+  PinDev: !Equals [!Ref PinDevWorkflowClaims, 'true']
 Resources:
   Provider:
     Type: AWS::IAM::OIDCProvider
@@ -58,15 +75,19 @@ Resources:
             Principal:
               Federated: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
             Condition: !If
-              - Pin
+              - PinDev
               - StringEquals:
                   token.actions.githubusercontent.com:aud: sts.amazonaws.com
-                  token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrgRepo}:environment:dev
+                  token.actions.githubusercontent.com:sub: !Sub
+                    - repo:${Subj}:environment:dev
+                    - Subj: !If [DevSubjectSet, !Ref DevSubjectRepo, !Ref GitHubOrgRepo]
                   token.actions.githubusercontent.com:ref: !Ref RequiredRef
                   token.actions.githubusercontent.com:job_workflow_ref: !Sub ${GitHubOrgRepo}/.github/workflows/${DeployWorkflowFile}@${RequiredRef}
               - StringEquals:
                   token.actions.githubusercontent.com:aud: sts.amazonaws.com
-                  token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrgRepo}:environment:dev
+                  token.actions.githubusercontent.com:sub: !Sub
+                    - repo:${Subj}:environment:dev
+                    - Subj: !If [DevSubjectSet, !Ref DevSubjectRepo, !Ref GitHubOrgRepo]
       Policies:
         - PolicyName: assume-cdk-bootstrap-roles-and-read-dev-stack
           PolicyDocument:
