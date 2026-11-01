@@ -131,6 +131,9 @@ class NeerAIStack(Stack):
                 allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Request-ID"], max_age=Duration.hours(1)))
         for p in PUBLIC_GET_ROUTES:
             api.add_routes(path=p, methods=[apigw.HttpMethod.GET], integration=integration, authorizer=apigw.HttpNoneAuthorizer())
+        # CORS preflights carry no Authorization header. Without an OPTIONS route they fall through to the JWT-protected
+        # $default route and get a 401, which browsers treat as a failed preflight. Only OPTIONS is opened here.
+        api.add_routes(path="/{proxy+}", methods=[apigw.HttpMethod.OPTIONS], integration=integration, authorizer=apigw.HttpNoneAuthorizer())
         # Explicit route so it can carry its own, stricter throttle (everything else falls through to $default).
         jobs_routes = api.add_routes(path="/api/jobs", methods=[apigw.HttpMethod.POST], integration=integration)
         access_logs = logs.LogGroup(self, "ApiAccessLogs", retention=retention, removal_policy=RemovalPolicy.DESTROY)

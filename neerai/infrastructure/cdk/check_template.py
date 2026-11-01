@@ -56,9 +56,16 @@ for k, p in of("AWS::ApiGatewayV2::Stage"):
     if set(p.get("AccessLogSettings", {})) != {"DestinationArn", "Format"}:
         bad.append(f"{k}: access log settings missing or malformed")
 auth_none = [p["RouteKey"] for _, p in of("AWS::ApiGatewayV2::Route") if p.get("AuthorizationType") == "NONE"]
-allowed = {"GET /health/live", "GET /health/ready", "GET /api/health", "GET /api/reference/options", "GET /api/demo/scenarios"}
+allowed = {"GET /health/live", "GET /health/ready", "GET /api/health", "GET /api/reference/options", "GET /api/demo/scenarios",
+           "OPTIONS /{proxy+}"}  # the OPTIONS catch-all lets CORS preflights (which carry no token) through
 if set(auth_none) - allowed:
     bad.append(f"unexpected unauthenticated routes: {sorted(set(auth_none) - allowed)}")
+route_auth = {p["RouteKey"]: p.get("AuthorizationType") for _, p in of("AWS::ApiGatewayV2::Route")}
+if route_auth.get("OPTIONS /{proxy+}") != "NONE":
+    bad.append("CORS preflight: OPTIONS /{proxy+} must exist and be unauthenticated, else browsers get 401 on preflight")
+for rk in ("POST /api/jobs", "$default"):
+    if route_auth.get(rk) != "JWT":
+        bad.append(f"route {rk!r} must stay JWT-protected")
 if not any(p.get("AuthorizationType") == "JWT" for _, p in of("AWS::ApiGatewayV2::Route")):
     bad.append("no JWT-protected route")
 for k, p in of("AWS::Cognito::UserPoolClient"):
