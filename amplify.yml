@@ -1,0 +1,25 @@
+# AWS Amplify Hosting build spec (monorepo: the app lives in neerai/frontend). Amplify reads this file from the repo root.
+# Environment variables (set in Amplify console > Hosting > Environment variables; all are PUBLIC identifiers, never secrets):
+#   VITE_API_URL            API Gateway URL            (CDK output ApiUrl)
+#   VITE_COGNITO_DOMAIN     Cognito hosted UI domain   (CDK output CognitoDomain)
+#   VITE_COGNITO_CLIENT_ID  Cognito app client id      (CDK output UserPoolClientId)
+version: 1
+applications:
+  - appRoot: neerai/frontend
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - nvm install 22 && nvm use 22
+            - node --version
+            - npm ci
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        baseDirectory: dist
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*

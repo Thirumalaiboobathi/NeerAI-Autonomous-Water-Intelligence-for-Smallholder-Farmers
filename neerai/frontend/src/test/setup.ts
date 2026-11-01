@@ -1,3 +1,4 @@
+import { pollConfig } from '../services/api'
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterEach } from 'vitest'
@@ -17,3 +18,5 @@ if (!window.matchMedia) {
   })) as never
 }
 Element.prototype.scrollIntoView = () => {}
+
+pollConfig.ms = 5

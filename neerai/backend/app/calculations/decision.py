@@ -42,7 +42,6 @@ def decide_field(
         f"Root-zone depletion {need.depletion_mm} mm of readily-available {need.raw_mm} mm ({need.depletion_source})",
         f"Application efficiency {need.efficiency:.0%}",
     ] + need.assumptions[:3]
-    changes: list[str] = []
     reasoning: list[str] = []
     dr_ratio = f"{need.stress_ratio:.1f}x"
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass
-from typing import Any, AsyncGenerator, Callable, Optional
+from typing import Any, AsyncGenerator, Callable
 
 from strands.models import Model
 
@@ -88,6 +88,6 @@ def bedrock_model(settings: Settings) -> Model:
         temperature=settings.bedrock_temperature,
         boto_client_config=Config(
             read_timeout=int(settings.agent_timeout_s), connect_timeout=5,
-            retries={"max_attempts": settings.agent_max_retries + 1, "mode": "standard"},
+            retries={"max_attempts": settings.bedrock_max_attempts, "mode": "standard"},  # exponential backoff + jitter
         ),
     )

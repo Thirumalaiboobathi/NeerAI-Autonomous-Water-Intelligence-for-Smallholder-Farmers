@@ -1,0 +1,127 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  One-time setup (run by an administrator, NOT by the pipeline): two GitHub Actions deploy roles (dev, prod) assumed through
+  OIDC by ONE repository. Each role is trusted only by its own GitHub Environment, so a job in the 'dev' environment
+  cannot assume the prod role. The roles hold no resource-creation permissions of their own: they may only assume the
+  existing CDK bootstrap roles and read NeerAI stacks. The shared CDK bootstrap roles are not created or modified here.
+Parameters:
+  GitHubOrgRepo:
+    Type: String
+    AllowedPattern: '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'
+    Description: owner/repo, e.g. Thirumalaiboobathi/NeerAI-Autonomous-Water-Intelligence-for-Smallholder-Farmers
+  DeployWorkflowFile:
+    Type: String
+    Default: deploy.yml
+    Description: The only workflow file allowed to assume the roles (.github/workflows/<file>).
+  RequiredRef:
+    Type: String
+    Default: refs/heads/main
+    Description: Git ref the deploying workflow must run from.
+  PinWorkflowClaims:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'true'
+    Description: >
+      true = additionally require the 'ref' and 'job_workflow_ref' claims in the trust policy (pins branch and workflow file).
+      IAM support for these GitHub claim keys was not verified against a primary AWS source when this template was written;
+      if AssumeRoleWithWebIdentity is denied for a legitimate run, redeploy with 'false' (the environment-name condition and
+      the GitHub environment's 'deployment branches: main only' setting still apply).
+  CreateOidcProvider:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'true'
+    Description: Set to false if token.actions.githubusercontent.com is already an IAM OIDC provider in this account.
+  CdkQualifier:
+    Type: String
+    Default: hnb659fds
+Conditions:
+  MakeProvider: !Equals [!Ref CreateOidcProvider, 'true']
+  Pin: !Equals [!Ref PinWorkflowClaims, 'true']
+Resources:
+  Provider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: MakeProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+
+  DevDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: neerai-github-deploy-dev
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRoleWithWebIdentity
+            Principal:
+              Federated: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Condition: !If
+              - Pin
+              - StringEquals:
+                  token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                  token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrgRepo}:environment:dev
+                  token.actions.githubusercontent.com:ref: !Ref RequiredRef
+                  token.actions.githubusercontent.com:job_workflow_ref: !Sub ${GitHubOrgRepo}/.github/workflows/${DeployWorkflowFile}@${RequiredRef}
+              - StringEquals:
+                  token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                  token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrgRepo}:environment:dev
+      Policies:
+        - PolicyName: assume-cdk-bootstrap-roles-and-read-dev-stack
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sts:AssumeRole
+                Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-${CdkQualifier}-*-role-${AWS::AccountId}-${AWS::Region}
+              - Effect: Allow
+                Action: [cloudformation:DescribeStacks, cloudformation:GetTemplate]
+                Resource: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/NeerAI-Dev/*
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cdk-bootstrap/${CdkQualifier}/version
+
+  ProdDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: neerai-github-deploy-prod
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRoleWithWebIdentity
+            Principal:
+              Federated: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Condition: !If
+              - Pin
+              - StringEquals:
+                  token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                  token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrgRepo}:environment:prod
+                  token.actions.githubusercontent.com:ref: !Ref RequiredRef
+                  token.actions.githubusercontent.com:job_workflow_ref: !Sub ${GitHubOrgRepo}/.github/workflows/${DeployWorkflowFile}@${RequiredRef}
+              - StringEquals:
+                  token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                  token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrgRepo}:environment:prod
+      Policies:
+        - PolicyName: assume-cdk-bootstrap-roles-and-read-prod-stack
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sts:AssumeRole
+                Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-${CdkQualifier}-*-role-${AWS::AccountId}-${AWS::Region}
+              - Effect: Allow
+                Action: [cloudformation:DescribeStacks, cloudformation:GetTemplate]
+                Resource: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/NeerAI-Prod/*
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cdk-bootstrap/${CdkQualifier}/version
+Outputs:
+  DevDeployRoleArn:
+    Value: !GetAtt DevDeployRole.Arn
+    Description: Informational. The deploy workflow derives this ARN from AWS_ACCOUNT_ID and the stage.
+  ProdDeployRoleArn:
+    Value: !GetAtt ProdDeployRole.Arn
+    Description: Informational.

@@ -108,7 +108,6 @@ class TraceHook(HookProvider):
         except (ValueError, TypeError):
             pass
         is_specialist = name in SPECIALIST_TOOL_NAMES
-        agent = SPECIALIST_TOOL_NAMES.get(name, self.agent_label)
         rc.record(
             agent=self.agent_label if not is_specialist else "Orchestrator",
             tool=name, kind="agent" if is_specialist else "tool",

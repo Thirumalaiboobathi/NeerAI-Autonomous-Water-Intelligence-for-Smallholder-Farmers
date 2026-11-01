@@ -38,8 +38,9 @@ describe('Dashboard — what should I do today?', () => {
     expect(within(dialog).getByText('Agent activity timeline')).toBeInTheDocument()
     expect(within(dialog).getByText('farm context →')).toBeInTheDocument()
     expect(within(dialog).getByText('allocate_water_budget')).toBeInTheDocument()
-    const assess = calls.find((c) => c.url === '/api/irrigation/assess')!
-    expect(assess.body).toMatchObject({ farm_id: 'farm_1', language: 'en' })
+    const assess = calls.find((c) => c.method === 'POST' && c.url === '/api/jobs')!
+    expect(assess.body).toMatchObject({ kind: 'assess', farm_id: 'farm_1', language: 'en' })
+    expect(calls.some((c) => c.url === '/api/jobs/job_1')).toBe(true) // polled the job status
   })
 
   it('shows a retryable error state when the backend is down', async () => {
@@ -153,7 +154,7 @@ describe('Ask NeerAI', () => {
     expect(screen.getByText('Estimated water use')).toBeInTheDocument()
     expect(screen.getByText(/Data sources/)).toBeInTheDocument()
     expect(screen.getByText(/Agent activity timeline \(3\)/)).toBeInTheDocument()
-    expect(calls.find((c) => c.url === '/api/agent/chat')!.body).toMatchObject({ farm_id: 'farm_1', language: 'en' })
+    expect(calls.find((c) => c.method === 'POST' && c.url === '/api/jobs')!.body).toMatchObject({ kind: 'chat', farm_id: 'farm_1', language: 'en' })
   })
 
   it('follow-up chips ask the next question', async () => {
@@ -161,23 +162,41 @@ describe('Ask NeerAI', () => {
     renderApp(<Ask />)
     await userEvent.type(await screen.findByLabelText('Ask about irrigation…'), 'hello{enter}')
     await userEvent.click(await screen.findByText('What happens if I delay irrigation by one day?'))
-    await waitFor(() => expect(calls.filter((c) => c.url === '/api/agent/chat')).toHaveLength(2))
+    await waitFor(() => expect(calls.filter((c) => c.method === 'POST' && c.url === '/api/jobs')).toHaveLength(2))
   })
 
   it('asks for missing information instead of guessing', async () => {
     const ex = { ...fx.execution, decision: { ...fx.plan.decision, headline_action: 'INSUFFICIENT_DATA' as const, decisions: [] }, allocation: null, message: null,
       answer: 'How much water do you have available for irrigation (in litres or cubic metres)?' }
-    mockApi({ 'POST /api/agent/chat': ex })
+    mockApi({ 'GET /api/agent/executions/exec_1': ex })
     renderApp(<Ask />)
     await userEvent.type(await screen.findByLabelText('Ask about irrigation…'), 'Should I irrigate?{enter}')
     expect(await screen.findByText(/How much water do you have available/)).toBeInTheDocument()
   })
 
-  it('shows an error when the agent endpoint times out', async () => {
-    mockApi({ 'POST /api/agent/chat': () => new Response(JSON.stringify({ detail: 'agent workflow exceeded 60s timeout' }), { status: 504 }) })
+  it('shows a safe, retryable message when the job fails', async () => {
+    mockApi({ 'GET /api/jobs/job_1': { id: 'job_1', status: 'failed', progress: 'failed', attempts: 3, execution_id: null,
+      error: { code: 'agent_error', message: 'The assessment could not be completed. Please try again.', retryable: true } } })
     renderApp(<Ask />)
     await userEvent.type(await screen.findByLabelText('Ask about irrigation…'), 'Should I irrigate?{enter}')
-    expect(await screen.findByText(/exceeded 60s timeout/)).toBeInTheDocument()
+    expect(await screen.findByText(/could not be completed/)).toBeInTheDocument()
+  })
+
+  it('shows queued progress while a job waits for a worker', async () => {
+    let polls = 0
+    mockApi({ 'GET /api/jobs/job_1': () => (++polls < 40 ? { id: 'job_1', status: 'queued', progress: 'queued', attempts: 0, execution_id: null, error: null }
+      : { id: 'job_1', status: 'succeeded', progress: 'complete', attempts: 1, execution_id: 'exec_1', error: null }) })
+    renderApp(<Ask />)
+    await userEvent.type(await screen.findByLabelText('Ask about irrigation…'), 'Should I irrigate?{enter}')
+    expect(await screen.findByText('Waiting for an available agent worker…')).toBeInTheDocument()
+    expect(await screen.findByText('Recommendation', {}, { timeout: 6000 })).toBeInTheDocument() // then completes
+  })
+
+  it('surfaces API errors when the job cannot be submitted (quota)', async () => {
+    mockApi({ 'POST /api/jobs': () => new Response(JSON.stringify({ detail: 'too many agent runs in progress; wait for one to finish' }), { status: 429 }) })
+    renderApp(<Ask />)
+    await userEvent.type(await screen.findByLabelText('Ask about irrigation…'), 'Should I irrigate?{enter}')
+    expect(await screen.findByText(/too many agent runs in progress/)).toBeInTheDocument()
   })
 
   it('works in Tamil', async () => {

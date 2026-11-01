@@ -1,4 +1,4 @@
 {
   "app": "python app.py",
-  "context": {"region": "ap-south-1"}
+  "context": {"region": "ap-south-1", "stage": "dev"}
 }

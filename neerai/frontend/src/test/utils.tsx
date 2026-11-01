@@ -26,8 +26,9 @@ export function mockApi(overrides: Record<string, Handler | unknown> = {}) {
     'GET /api/irrigation/plans': [],
     'POST /api/irrigation/plan': fx.plan,
     'POST /api/water/allocate': fx.plan,
-    'POST /api/agent/chat': fx.execution,
-    'POST /api/irrigation/assess': fx.execution,
+    'POST /api/jobs': { id: 'job_1', status: 'queued', progress: 'queued', attempts: 0, execution_id: null, error: null },
+    'GET /api/jobs/job_1': { id: 'job_1', status: 'succeeded', progress: 'complete', attempts: 1, execution_id: 'exec_1', error: null },
+    'GET /api/agent/executions/exec_1': fx.execution,
     'POST /api/scenarios/simulate': fx.comparison,
     ...overrides,
   }

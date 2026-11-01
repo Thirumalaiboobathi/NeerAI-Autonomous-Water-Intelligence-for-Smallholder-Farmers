@@ -4,7 +4,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from ..repositories.base import EXECUTION, FARM, FIELD, SCENARIO, Store
-from ..schemas.domain import AgentExecution, Field_, ScenarioRecord
+from ..schemas.domain import AgentExecution, ScenarioRecord
 
 BASELINE_DEFINITION = (
     "Baseline = fixed-schedule irrigation: each field receives its crop's usual application depth at the usual interval "

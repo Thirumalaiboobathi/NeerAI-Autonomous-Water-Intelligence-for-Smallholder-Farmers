@@ -1,0 +1,20 @@
+# Amplify custom response headers (monorepo form). Strict CSP because access tokens live in sessionStorage.
+# connect-src: the API Gateway endpoint and the Cognito hosted UI/token endpoint. Tighten the wildcards to your exact
+# API id / Cognito domain after the first deploy.
+applications:
+  - appRoot: neerai/frontend
+    customHeaders:
+      - pattern: '**'
+        headers:
+          - key: Strict-Transport-Security
+            value: 'max-age=31536000; includeSubDomains'
+          - key: X-Content-Type-Options
+            value: nosniff
+          - key: X-Frame-Options
+            value: DENY
+          - key: Referrer-Policy
+            value: strict-origin-when-cross-origin
+          - key: Permissions-Policy
+            value: 'geolocation=(self), camera=(), microphone=()'
+          - key: Content-Security-Policy
+            value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src 'self' data:; connect-src 'self' https://*.execute-api.ap-south-1.amazonaws.com https://*.auth.ap-south-1.amazoncognito.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://*.auth.ap-south-1.amazoncognito.com; object-src 'none'"

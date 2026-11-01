@@ -7,3 +7,19 @@ backend/build/
 cdk.out/
 .env
 .pytest_cache/
+# secrets / local environment (placeholders live in *.example)
+.env.*
+!.env.example
+# deployment outputs and generated infra state
+outputs.json
+cdk.context.json
+*.zip
+# caches, coverage, logs, OS/editor noise
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.log
+*.tsbuildinfo
+.DS_Store
+Thumbs.db

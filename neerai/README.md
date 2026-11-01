@@ -11,7 +11,7 @@ Dashboard ("What should I do today?") - My Farms with onboarding and map - Irrig
 ## Architecture & agents
 Orchestrator `strands.Agent` delegating to 7 specialist Agents (Farm Context, Weather, Crop Water, Water Budget, Decision, Scenario, Tamil Communication), each with deterministic tools. **LLMs never compute numbers.** Details and Mermaid diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-Stack: Python 3.12+, Strands Agents 1.63, FastAPI, Pydantic, SQLAlchemy (SQLite/PostgreSQL) or DynamoDB - React, TypeScript, Vite, MUI, TanStack Query, Recharts, Leaflet - AWS CDK (Lambda, API Gateway, DynamoDB, S3, CloudFront, CloudWatch, Bedrock).
+Stack: Python 3.12+, Strands Agents 1.63, FastAPI, Pydantic, SQLAlchemy (SQLite/PostgreSQL) or DynamoDB - React, TypeScript, Vite, MUI, TanStack Query, Recharts, Leaflet - AWS CDK (Amplify Hosting, API Gateway, Lambda, SQS, DynamoDB, Cognito, CloudWatch, Bedrock).
 
 ## Quick start (no AWS needed)
 ```
@@ -29,7 +29,7 @@ backend/.venv/Scripts/python scripts/validate_bedrock.py                  # ONE 
 backend/.venv/Scripts/python scripts/validate_bedrock.py --weather openmeteo   # with live weather
 set NEERAI_LIVE_TESTS=1 && cd backend && python -m pytest tests/test_live_weather.py    # real Open-Meteo calls
 cd infrastructure/cdk && python -m venv .venv && .venv/Scripts/pip install -r requirements.txt
-set CDK_CONTEXT_JSON={"originVerifySecret":"<random>"} && set CDK_OUTDIR=cdk.out && python app.py   # synthesize only; deploys nothing
+python scripts/build_lambda.py --stub && set CDK_DEFAULT_ACCOUNT=123456789012 && set CDK_OUTDIR=cdk.out && set CDK_CONTEXT_JSON={"frontendOrigin":"https://main.d1example.amplifyapp.com"} && python app.py   # synthesize only; deploys nothing
 ```
 In `ap-south-1` Nova Pro needs the inference profile `apac.amazon.nova-pro-v1:0` (the default). Required IAM: `bedrock:InvokeModel` + `bedrock:InvokeModelWithResponseStream` on that profile and the underlying foundation model.
 
@@ -38,7 +38,7 @@ See [.env.example](.env.example) (all `NEERAI_*`). Key ones: `AGENT_MODE` (demo|
 
 ## Tests
 ```
-cd backend && python -m pytest        # 206 tests: calculations, allocation property tests, agents, API, eval dataset
+cd backend && python -m pytest        # 250 tests (5 live-only skipped by default): calculations, allocation property tests, agents, API, eval dataset
 cd frontend && npm test && npm run typecheck
 ```
 Evaluation dataset: `backend/tests/eval/scenarios.json` (tool use, water constraints, honesty, Tamil, recovery) - deterministic, no LLM judge.
@@ -49,7 +49,7 @@ FastAPI docs at `/docs`: `/api/health`, `/api/farms`, `/api/fields`, `/api/weath
 ## Limitations (please read)
 - Crop coefficients, soil constants and effective-rain rules are **sample FAO-56-based values** in `backend/app/calculations/data/`; validate with local agronomists. Depletion without a soil-moisture reading is a rough estimate (stated as an assumption in every result).
 - Demo weather is simulated. Live Open-Meteo is validated with real requests; in live mode (`NEERAI_WEATHER_PROVIDER=openmeteo`) an outage yields an explicit "weather unavailable" answer, never simulated data. `auto` mode is an opt-in labelled fallback.
-- Bedrock mode is verified with real requests (see checklist). The DynamoDB repository and the deployed CDK stack are **not verified against a live AWS account**; CDK synthesis passes but nothing was deployed.
+- Bedrock mode is verified with real requests (see checklist). The DynamoDB repository, SQS worker and CDK stack are tested only against `moto` emulation and template checks, **not a live AWS account**; nothing was deployed.
 - Savings are modelled against a stated baseline; **measured savings are zero** until farmers log meter data.
 - Bedrock run-to-run reliability: Nova Pro occasionally fails mid-stream or skips a tool call; NeerAI enforces required inputs deterministically and completes missing steps via a traced fallback (a request can then take 60 s+).
 - Demand is capped at a full root-zone refill, so a heatwave does not raise demand for fields that are already fully depleted.
@@ -57,5 +57,8 @@ FastAPI docs at `/docs`: `/api/health`, `/api/farms`, `/api/fields`, `/api/weath
 
 ## Future work
 Auth and farmer groups, soil-moisture sensor ingestion, meter-based measured savings, SMS/WhatsApp voice delivery, community water-sharing across farms, calibrated regional crop parameters, Bedrock Guardrails.
+
+## AWS deployment (not deployed yet)
+Serverless and Docker-free: Amplify Hosting + API Gateway + Lambda + SQS worker + DynamoDB + Cognito. Agent runs are asynchronous jobs (`POST /api/jobs`, poll `GET /api/jobs/{id}`). Nothing has been deployed; see [Deployment](docs/DEPLOYMENT.md), [Cost](docs/COST_ESTIMATE.md), [Security](docs/SECURITY.md), [Operations](docs/OPERATIONS.md), [Environment](docs/ENVIRONMENT.md), [Troubleshooting](docs/TROUBLESHOOTING.md).
 
 Docs: [Architecture](docs/ARCHITECTURE.md) - [Deployment](docs/DEPLOYMENT.md) - [Article draft](docs/BUILDER_CENTER_ARTICLE.md) - [Demo script](docs/DEMO_VIDEO_SCRIPT.md) - [Checklist](docs/SUBMISSION_CHECKLIST.md)

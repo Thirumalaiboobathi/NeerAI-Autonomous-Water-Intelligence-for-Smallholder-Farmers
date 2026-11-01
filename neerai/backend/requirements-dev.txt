@@ -5,3 +5,4 @@ pytest-asyncio==1.4.1
 pytest-cov
 ruff==0.17.3
 pip-audit
+moto[dynamodb,sqs]==5.2.5

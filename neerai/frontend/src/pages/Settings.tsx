@@ -15,6 +15,7 @@ import FarmGate from '../components/FarmGate'
 import { useDemoInfo, useHealth, useInvalidateData, useOptions } from '../hooks/useApi'
 import { useT } from '../i18n'
 import { api } from '../services/api'
+import { authEnabled, logout } from '../services/auth'
 import type { Farm } from '../types/api'
 
 function WaterEditor({ farm }: { farm: Farm }) {
@@ -49,6 +50,7 @@ export default function Settings() {
   return (
     <>
       <PageHeader title={t('settings.title')} />
+      {authEnabled && <Button variant="outlined" onClick={logout} sx={{ mb: 2 }}>{t('auth.signout')}</Button>}
       <Grid cols={{ xs: 1, lg: 2 }}>
         <Panel title={t('settings.language')}>
           <ToggleButtonGroup exclusive value={lang} onChange={(_, v) => v && setLang(v)} aria-label={t('lang.toggle')}>

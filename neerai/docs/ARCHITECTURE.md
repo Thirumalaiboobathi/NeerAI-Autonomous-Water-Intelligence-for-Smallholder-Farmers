@@ -78,17 +78,4 @@ flowchart TD
 ```
 
 ## AWS deployment
-```mermaid
-flowchart LR
-  U[Browser] --> CF[CloudFront]
-  CF -->|static| S3S[(S3 site bucket, OAC)]
-  CF -->|/api/*, throttled| APIGW[API Gateway HTTP API]
-  CF -->|/api/agent/*, /api/irrigation/assess, 60 s| FURL[Lambda Function URL]
-  APIGW --> L[Lambda: FastAPI via Mangum]
-  FURL --> L
-  L --> BR[Amazon Bedrock]
-  L --> DDB[(DynamoDB on-demand)]
-  L --> S3R[(S3 reports)]
-  L --> CW[CloudWatch logs + alarms]
-```
-IAM is least-privilege: DynamoDB table RW, S3 put on the reports bucket, and `bedrock:InvokeModel*` on the configured model only.
+Serverless, Docker-free; full detail, job lifecycle and diagram in [DEPLOYMENT.md](DEPLOYMENT.md). Summary: Amplify Hosting (React) -> API Gateway HTTP API with Cognito JWT authorizer -> Lambda (FastAPI/Mangum) for short routes; `POST /api/jobs` writes a DynamoDB job record and an SQS message, a worker Lambda runs the Strands agents against Bedrock, and the browser polls `GET /api/jobs/{id}`. Data is partitioned per user (`USER#<sub>`), so tenant isolation is part of the storage key. Security: [SECURITY.md](SECURITY.md). Operations: [OPERATIONS.md](OPERATIONS.md).

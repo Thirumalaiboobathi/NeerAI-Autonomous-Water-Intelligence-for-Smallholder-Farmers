@@ -9,7 +9,7 @@ import re
 from typing import Optional
 
 from ..schemas.domain import (
-    Action, FarmContext, FarmerMessage, Language, OverallDecision, ScenarioComparison, WaterAllocationPlan,
+    Action, FarmerMessage, Language, OverallDecision, ScenarioComparison, WaterAllocationPlan,
     WeatherAssessment,
 )
 from ..calculations import reference as ref

@@ -51,6 +51,7 @@ export const en: Record<string, string> = {
   'sim.m_rain': 'Rainfall contribution', 'sim.m_risk': 'Fields at higher risk', 'sim.compare': 'Scenario comparison', 'sim.custom': 'Your what-if', 'sim.custom_desc': 'Custom settings',
   'ask.title': 'Ask NeerAI', 'ask.subtitle': 'Ask in Tamil or English. Specialist agents check weather, crop water and your water budget.',
   'ask.try': 'Try asking', 'ask.hint': 'Mention water, e.g. “I have only 400 m3”, to see priorities under scarcity.', 'ask.placeholder': 'Ask about irrigation…',
+  'ask.queued': 'Waiting for an available agent worker…', 'auth.title': 'Sign in to NeerAI', 'auth.body': 'Your farms and plans are private to your account.', 'auth.signin': 'Sign in', 'auth.signout': 'Sign out', 'auth.failed': 'Sign-in could not be completed. Please try again.',
   'ask.send': 'Send', 'ask.thinking': 'Agents are working…', 'ask.rec': 'Recommendation', 'ask.water_use': 'Estimated water use', 'ask.next': 'Next actions & reasons',
   'ask.scenarios': 'What-if results', 'ask.sources': 'Data sources', 'ask.partial': 'Some steps used the fallback engine; see the timeline.',
   'impact.title': 'Impact', 'impact.subtitle': 'Measured by what NeerAI computed. Modelled numbers are never presented as measured savings.',

@@ -2,21 +2,26 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel, Field
 
 from ..agents import messages as farmer_messages
-from ..agents.orchestrator import run_assessment
 from ..calculations import reference as ref
 from ..calculations import scenarios as sc
 from ..calculations.pipeline import build_context, run_core
 from ..calculations.units import to_litres
+from ..core.auth import Principal, current_principal
 from ..core.config import Settings
 from ..integrations.weather import MOCK_SCENARIOS
 from ..repositories.base import EXECUTION, FARM, FIELD, PLAN, SCENARIO, Store
+from ..schemas.jobs import Job, JobRequest, JobView
+from ..services import audit
+from ..services import jobs as jobsvc
 from ..schemas.domain import (
     AgentExecution, Farm, FarmCreate, Field_, FieldCreate, IrrigationPlanRecord, Language, ScenarioComparison, ScenarioRecord,
 )
@@ -32,10 +37,22 @@ class AppState:
     settings: Settings
     store: Store
     weather: WeatherService
+    queue: Any = None
+    verifier: Any = None
+    principal: Optional[Principal] = None
 
 
-def state(request: Request) -> AppState:
-    return request.app.state.neerai
+def state(request: Request, principal: Principal = Depends(current_principal)) -> AppState:
+    """Per-request state whose store is scoped to the authenticated user: other users' records are unreachable."""
+    base: AppState = request.app.state.neerai
+    return dataclasses.replace(base, store=base.store.scoped(principal.user_id), principal=principal)
+
+
+def run_assessment(*args, **kwargs):
+    """Lazy wrapper: the API Lambda never loads Strands in AWS (keeps cold start short); tests patch this name."""
+    from ..agents.orchestrator import run_assessment as _run
+
+    return _run(*args, **kwargs)
 
 
 router = APIRouter(prefix="/api")
@@ -87,10 +104,32 @@ def seed_demo(st: AppState, key: str, reset: bool = False) -> Farm:
 
 # ───────────────────────── health & reference ─────────────────────────
 
+health_router = APIRouter()
+
+
 @router.get("/health")
-def health(st: AppState = Depends(state)):
+def health(request: Request):
+    st: AppState = request.app.state.neerai
     return {"status": "ok", "agent_mode": st.settings.agent_mode, "weather_provider": st.settings.weather_provider,
-            "env": st.settings.env, "repository": st.settings.repository}
+            "env": st.settings.env, "repository": st.settings.repository, "auth_mode": st.settings.auth_mode}
+
+
+@health_router.get("/health/live")
+def live():
+    """Liveness: the process is up. Does not touch any dependency."""
+    return {"status": "alive"}
+
+
+@health_router.get("/health/ready")
+def ready(request: Request, response: Response):
+    """Readiness: required local dependencies only (the repository). Open-Meteo/Bedrock being down never fails readiness."""
+    st: AppState = request.app.state.neerai
+    try:
+        st.store.repo.get_raw("health", "ping")
+    except Exception as e:  # noqa: BLE001
+        response.status_code = 503
+        return {"status": "not_ready", "repository": type(e).__name__}
+    return {"status": "ready", "repository": "ok"}
 
 
 @router.get("/reference/options")
@@ -241,6 +280,7 @@ def irrigation_plan(body: PlanRequest, st: AppState = Depends(state)) -> PlanRes
             allocation=result.allocation, weather_source=result.weather.source, weather_simulated=result.weather.simulated,
         )
         st.store.save(PLAN, rec, parent=farm.id)
+        audit.record(st.store, "plan_saved", rec.id)
         result.plan_id = rec.id
     return result
 
@@ -331,6 +371,8 @@ def simulate(body: SimulateRequest, st: AppState = Depends(state)) -> ScenarioCo
 # ───────────────────────── agents ─────────────────────────
 
 async def _run_agents(st: AppState, farm: Farm, query: str, language: Language, **kw) -> AgentExecution:
+    if st.settings.env == "aws":
+        raise HTTPException(410, "synchronous agent runs are disabled in this deployment; use POST /api/jobs and poll GET /api/jobs/{id}")
     fields = _fields(st, farm.id)
     try:
         ex = await asyncio.wait_for(
@@ -359,6 +401,55 @@ async def chat(body: ChatRequest, st: AppState = Depends(state)) -> AgentExecuti
     farm = _farm_or_404(st, body.farm_id)
     _check_weather_scenario(body.weather_scenario)
     return await _run_agents(st, farm, body.message, body.language, weather_scenario=body.weather_scenario)
+
+
+# ───────────────────────── async jobs ─────────────────────────
+
+class JobCreate(BaseModel):
+    kind: Literal["assess", "chat"] = "assess"
+    farm_id: str
+    query: str = Field(min_length=1, max_length=500)
+    language: Language = Language.en
+    available_water: Optional[float] = Field(default=None, ge=0, le=1e10)
+    available_water_unit: Literal["litres", "m3"] = "litres"
+    priority_overrides: dict[str, float] = Field(default_factory=dict)
+    weather_scenario: Optional[str] = None
+
+
+@router.post("/jobs", status_code=202)
+def create_job(body: JobCreate, response: Response, st: AppState = Depends(state),
+               idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key")) -> JobView:
+    """Queue a long-running agent workflow. Poll GET /api/jobs/{id}; send an Idempotency-Key to make retries safe."""
+    _check_weather_scenario(body.weather_scenario)
+    if len(body.priority_overrides) > 20:
+        raise HTTPException(422, "too many priority overrides")
+    req = JobRequest(kind=body.kind, farm_id=body.farm_id, query=body.query, language=body.language,
+                     available_litres=_litres(body.available_water, body.available_water_unit),
+                     priority_overrides=body.priority_overrides, weather_scenario=body.weather_scenario)
+    try:
+        job, created = jobsvc.submit(st.settings, st.store, st.queue, req, idempotency_key)
+    except KeyError as e:
+        raise HTTPException(404, "farm not found") from e
+    except jobsvc.QuotaExceeded as e:
+        raise HTTPException(429, str(e), headers={"Retry-After": "30"}) from e
+    except jobsvc.EnqueueFailed as e:
+        raise HTTPException(503, "could not queue the job; please retry") from e
+    if not created:
+        response.status_code = 200
+    return JobView.of(job)
+
+
+@router.get("/jobs/{job_id}")
+def get_job(job_id: str, st: AppState = Depends(state)) -> JobView:
+    job = st.store.get("job", job_id, Job)
+    if not job:
+        raise HTTPException(404, "job not found")
+    return JobView.of(job)
+
+
+@router.get("/jobs")
+def list_jobs(limit: int = Query(10, ge=1, le=50), st: AppState = Depends(state)) -> list[JobView]:
+    return [JobView.of(j) for j in st.store.list("job", Job, limit=limit)]
 
 
 @router.get("/agent/executions/{execution_id}")

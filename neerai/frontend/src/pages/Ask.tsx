@@ -96,8 +96,9 @@ function AskBody({ farm }: { farm: Farm }) {
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [text, setText] = useState('')
   const end = useRef<HTMLDivElement>(null)
+  const [jobStatus, setJobStatus] = useState<string>('')
   const send = useMutation({
-    mutationFn: (q: string) => api.chat({ farm_id: farm.id, message: q, language: lang, weather_scenario: weatherScenario }),
+    mutationFn: (q: string) => api.chat({ farm_id: farm.id, message: q, language: lang, weather_scenario: weatherScenario }, (j) => setJobStatus(j.status)),
     onSuccess: (ex) => { setMsgs((m) => [...m, { role: 'assistant', ex }]); invalidate() },
   })
   useEffect(() => { end.current?.scrollIntoView?.({ behavior: 'smooth' }) }, [msgs.length, send.isPending])
@@ -136,7 +137,7 @@ function AskBody({ farm }: { farm: Farm }) {
             <Paper variant="outlined" sx={{ p: 2, flexGrow: 1, minWidth: 0 }}><Answer ex={m.ex} onFollow={ask} /></Paper>
           </Stack>
         ))}
-        {send.isPending && <Stack direction="row" spacing={1.5} alignItems="center"><CircularProgress size={22} /><Typography color="text.secondary">{t('ask.thinking')}</Typography></Stack>}
+        {send.isPending && <Stack direction="row" spacing={1.5} alignItems="center"><CircularProgress size={22} /><Typography color="text.secondary">{jobStatus === 'queued' ? t('ask.queued') : t('ask.thinking')}</Typography></Stack>}
         {send.error && <ErrorBlock error={send.error} />}
         <div ref={end} />
       </Stack>

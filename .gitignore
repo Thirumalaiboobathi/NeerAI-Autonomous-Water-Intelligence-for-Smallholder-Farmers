@@ -1,0 +1,8 @@
+# Repository-root ignore rules (the app has its own at neerai/.gitignore)
+.env
+.env.*
+!.env.example
+*.zip
+node_modules/
+.DS_Store
+Thumbs.db

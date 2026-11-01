@@ -1,0 +1,80 @@
+name: Deploy (manual)
+# Never runs automatically. Choose a stage and an action. 'prod' should be protected by required reviewers in
+# GitHub > Settings > Environments > prod. AWS access is via OIDC: no access keys are stored in GitHub.
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: Stage
+        type: choice
+        options: [dev, prod]
+        default: dev
+      action:
+        description: diff = show changes only; deploy = apply them
+        type: choice
+        options: [diff, deploy]
+        default: diff
+permissions:
+  id-token: write
+  contents: read
+concurrency:
+  group: deploy-${{ inputs.stage }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.stage }}
+    env:
+      AWS_REGION: ap-south-1
+      STACK: NeerAI-${{ inputs.stage == 'prod' && 'Prod' || 'Dev' }}
+      CDK_CTX: -c stage=${{ inputs.stage }} -c frontendOrigin=${{ vars.FRONTEND_ORIGIN }} -c alertEmail=${{ vars.ALERT_EMAIL }}
+    steps:
+      - name: Deploy only from main
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then echo "Deployments run only from main (got $GITHUB_REF)"; exit 1; fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Authenticate to AWS (OIDC, stage-specific role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # dev -> neerai-github-deploy-dev, prod -> neerai-github-deploy-prod; each trusts only its own GitHub Environment
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/neerai-github-deploy-${{ inputs.stage }}
+          aws-region: ap-south-1
+          role-session-name: neerai-${{ inputs.stage }}-${{ github.run_id }}
+      - name: Verify target account
+        run: |
+          acct=$(aws sts get-caller-identity --query Account --output text)
+          test "$acct" = "${{ vars.AWS_ACCOUNT_ID }}" || { echo "Unexpected AWS account - aborting"; exit 1; }
+          echo "CDK_DEFAULT_ACCOUNT=$acct" >> "$GITHUB_ENV"
+      - name: Backend tests (gate)
+        working-directory: neerai/backend
+        run: |
+          pip install -r requirements-dev.txt
+          pytest -q
+      - name: Build Lambda package (Docker-free)
+        run: python neerai/scripts/build_lambda.py
+      - name: Install CDK
+        working-directory: neerai/infrastructure/cdk
+        run: |
+          pip install -r requirements.txt
+          npm install --no-save aws-cdk@2
+      - name: cdk diff
+        working-directory: neerai/infrastructure/cdk
+        run: npx cdk diff "$STACK" $CDK_CTX
+      - name: cdk deploy
+        if: inputs.action == 'deploy'
+        working-directory: neerai/infrastructure/cdk
+        run: npx cdk deploy "$STACK" $CDK_CTX --require-approval never --outputs-file outputs.json
+      - name: Smoke test (public surface)
+        if: inputs.action == 'deploy'
+        working-directory: neerai/infrastructure/cdk
+        run: |
+          api=$(python -c "import json;print(json.load(open('outputs.json'))['$STACK']['ApiUrl'])")
+          python ../../scripts/smoke_test.py "$api"
+      - name: Frontend
+        if: inputs.action == 'deploy'
+        run: echo "The frontend deploys through Amplify Git integration (push to the connected branch). Update the Amplify environment variables from the stack outputs first."
