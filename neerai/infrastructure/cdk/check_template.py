@@ -42,6 +42,11 @@ for k, p in of("AWS::Logs::LogGroup"):
 for k, p in of("AWS::ApiGatewayV2::Stage"):
     if "DefaultRouteSettings" not in p:
         bad.append(f"{k}: no default throttling")
+    for rk, rs in p.get("RouteSettings", {}).items():
+        if not set(rs) <= {"ThrottlingBurstLimit", "ThrottlingRateLimit", "LoggingLevel", "DetailedMetricsEnabled", "DataTraceEnabled"}:
+            bad.append(f"{k}: route {rk} has property names CloudFormation will reject: {sorted(rs)}")
+    if set(p.get("AccessLogSettings", {})) != {"DestinationArn", "Format"}:
+        bad.append(f"{k}: access log settings missing or malformed")
 auth_none = [p["RouteKey"] for _, p in of("AWS::ApiGatewayV2::Route") if p.get("AuthorizationType") == "NONE"]
 allowed = {"GET /health/live", "GET /health/ready", "GET /api/health", "GET /api/reference/options", "GET /api/demo/scenarios"}
 if set(auth_none) - allowed:
