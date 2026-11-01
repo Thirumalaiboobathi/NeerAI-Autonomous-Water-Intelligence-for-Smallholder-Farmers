@@ -45,6 +45,14 @@ for k, p in of("AWS::ApiGatewayV2::Stage"):
     for rk, rs in p.get("RouteSettings", {}).items():
         if not set(rs) <= {"ThrottlingBurstLimit", "ThrottlingRateLimit", "LoggingLevel", "DetailedMetricsEnabled", "DataTraceEnabled"}:
             bad.append(f"{k}: route {rk} has property names CloudFormation will reject: {sorted(rs)}")
+    routes = {rp["RouteKey"]: rk for rk, rp in of("AWS::ApiGatewayV2::Route")}
+    deps = R[k].get("DependsOn", [])
+    deps = [deps] if isinstance(deps, str) else deps
+    for rk in p.get("RouteSettings", {}):
+        if rk not in routes:
+            bad.append(f"{k}: RouteSettings key {rk!r} matches no route in the template")
+        elif routes[rk] not in deps:
+            bad.append(f"{k}: must DependOn route {routes[rk]} ({rk}) or API Gateway rejects the stage")
     if set(p.get("AccessLogSettings", {})) != {"DestinationArn", "Format"}:
         bad.append(f"{k}: access log settings missing or malformed")
 auth_none = [p["RouteKey"] for _, p in of("AWS::ApiGatewayV2::Route") if p.get("AuthorizationType") == "NONE"]

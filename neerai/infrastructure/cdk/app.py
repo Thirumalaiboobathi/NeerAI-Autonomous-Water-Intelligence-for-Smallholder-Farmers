@@ -132,12 +132,15 @@ class NeerAIStack(Stack):
         for p in PUBLIC_GET_ROUTES:
             api.add_routes(path=p, methods=[apigw.HttpMethod.GET], integration=integration, authorizer=apigw.HttpNoneAuthorizer())
         # Explicit route so it can carry its own, stricter throttle (everything else falls through to $default).
-        api.add_routes(path="/api/jobs", methods=[apigw.HttpMethod.POST], integration=integration)
+        jobs_routes = api.add_routes(path="/api/jobs", methods=[apigw.HttpMethod.POST], integration=integration)
         access_logs = logs.LogGroup(self, "ApiAccessLogs", retention=retention, removal_policy=RemovalPolicy.DESTROY)
         stage_cfn = api.default_stage.node.default_child  # type: ignore[union-attr]
         stage_cfn.default_route_settings = {"throttlingRateLimit": 20, "throttlingBurstLimit": 40}  # type: ignore[attr-defined]
         # route_settings is an untyped map: CloudFormation property names are passed through verbatim (PascalCase)
         stage_cfn.route_settings = {"POST /api/jobs": {"ThrottlingRateLimit": 3, "ThrottlingBurstLimit": 6}}  # type: ignore[attr-defined]
+        # API Gateway rejects a stage whose RouteSettings name a route that does not exist yet, and CDK adds no ordering.
+        for route in jobs_routes:
+            stage_cfn.add_dependency(route.node.default_child)  # type: ignore[arg-type]
         stage_cfn.access_log_settings = {  # type: ignore[attr-defined]
             "destinationArn": access_logs.log_group_arn,
             "format": '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","method":"$context.httpMethod",'
