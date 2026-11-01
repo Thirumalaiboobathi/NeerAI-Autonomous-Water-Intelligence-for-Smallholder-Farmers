@@ -58,6 +58,16 @@ def run_assessment(*args, **kwargs):
 router = APIRouter(prefix="/api")
 
 
+def _demo_cap(st: AppState, kind: str) -> None:
+    """Demo mode only: the shared demo principal may store a bounded number of records of each kind (abuse/cost control)."""
+    s = st.settings
+    if s.auth_mode != "demo":
+        return
+    limit = {FARM: s.demo_max_farms, FIELD: s.demo_max_fields, PLAN: s.demo_max_plans, SCENARIO: s.demo_max_scenarios}[kind]
+    if st.store.count(kind) >= limit:
+        raise HTTPException(429, f"demo limit reached: at most {limit} {kind} records. Delete one or reload the demo farm.")
+
+
 def _farm_or_404(st: AppState, farm_id: str) -> Farm:
     farm = st.store.get(FARM, farm_id, Farm)
     if not farm:
@@ -96,6 +106,7 @@ def seed_demo(st: AppState, key: str, reset: bool = False) -> Farm:
         for f in _fields(st, e.id):
             st.store.delete(FIELD, f.id)
         st.store.delete(FARM, e.id)
+    _demo_cap(st, FARM)
     st.store.save(FARM, farm)
     for f in fields:
         st.store.save(FIELD, f, parent=farm.id)
@@ -153,6 +164,7 @@ def list_farms(st: AppState = Depends(state)) -> list[Farm]:
 
 @router.post("/farms", status_code=201)
 def create_farm(body: FarmCreate, st: AppState = Depends(state)) -> Farm:
+    _demo_cap(st, FARM)
     farm = Farm(**body.model_dump())
     st.store.save(FARM, farm)
     return farm
@@ -200,6 +212,7 @@ def create_field(body: FieldCreate, st: AppState = Depends(state)) -> Field_:
         field = demo_seed.field_from_create(body)
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
+    _demo_cap(st, FIELD)
     st.store.save(FIELD, field, parent=body.farm_id)
     return field
 
@@ -273,6 +286,7 @@ def irrigation_plan(body: PlanRequest, st: AppState = Depends(state)) -> PlanRes
     farm = _farm_or_404(st, body.farm_id)
     result, avail = _plan(st, farm, _fields(st, farm.id), body)
     if body.save:
+        _demo_cap(st, PLAN)
         rec = IrrigationPlanRecord(
             farm_id=farm.id, label=body.label or "Saved plan", available_litres=avail,
             total_demand_litres=result.allocation.total_demand_litres, total_allocated_litres=result.allocation.total_allocated_litres,
@@ -364,6 +378,7 @@ def simulate(body: SimulateRequest, st: AppState = Depends(state)) -> ScenarioCo
         comp = sc.compare(ctx, w, avail, params, st.settings.planning_horizon_days)
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
+    _demo_cap(st, SCENARIO)
     st.store.save(SCENARIO, ScenarioRecord(farm_id=farm.id, comparison=comp), parent=farm.id)
     return comp
 

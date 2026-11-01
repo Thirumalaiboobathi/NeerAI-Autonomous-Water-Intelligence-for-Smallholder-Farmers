@@ -64,3 +64,12 @@ jobs:
           test -s cdk.out/NeerAI-Dev.template.json
       - name: Template policy checks (no wildcard IAM actions, no public resources)
         run: python neerai/infrastructure/cdk/check_template.py neerai/infrastructure/cdk/cdk.out/NeerAI-Dev.template.json
+      - name: Demo mode (dev only) - synthesizes with the tightened controls, and is refused for prod
+        working-directory: neerai/infrastructure/cdk
+        env:
+          CDK_DEFAULT_ACCOUNT: '123456789012'
+          CDK_OUTDIR: cdk.out.demo
+        run: |
+          CDK_CONTEXT_JSON='{"stage":"dev","region":"ap-south-1","frontendOrigin":"https://main.d1example.amplifyapp.com","demoMode":"true"}' python app.py
+          python check_template.py cdk.out.demo/NeerAI-Dev.template.json
+          if CDK_CONTEXT_JSON='{"stage":"prod","region":"ap-south-1","frontendOrigin":"https://main.d1example.amplifyapp.com","demoMode":"true"}' python app.py; then echo "prod demoMode must be refused"; exit 1; fi

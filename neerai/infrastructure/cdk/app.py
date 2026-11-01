@@ -13,6 +13,8 @@ Context (cdk.json or -c key=value):
   alertEmail       optional: subscribes this address to the alarm topic
   createBudget     "true" to add a $25/month AWS Budget (needs budgetEmail)
   workerConcurrency  max concurrent agent runs (SQS event source max concurrency, 2..N; default 3)
+  demoMode         "true" = NO SIGN-IN: every API route is unauthenticated and acts as one shared demo principal. DEV ONLY
+                   (refused for prod), with tighter throttles and agent-job caps. Anything else keeps Cognito JWT auth.
 
 Nothing here is deployed by synthesis. `cdk deploy` creates billable resources and needs explicit approval.
 """
@@ -38,6 +40,11 @@ REGION = "ap-south-1"
 PUBLIC_GET_ROUTES = ["/health/live", "/health/ready", "/api/health", "/api/reference/options", "/api/demo/scenarios"]
 BUILD_DIR = Path(__file__).resolve().parents[2] / "backend" / "build" / "lambda"
 
+# Demo mode (dev only): the shared principal makes these *global* caps. Keep in sync with core/config.py DEMO_* and check_template.py.
+DEMO_THROTTLE = (10, 20)       # stage default rate/burst (normal: 20/40)
+DEMO_JOBS_THROTTLE = (1, 2)    # POST /api/jobs, the only route that starts Bedrock work (normal: 3/6)
+DEMO_MAX_ACTIVE_JOBS, DEMO_MAX_JOBS_PER_DAY, DEMO_MAX_BODY_BYTES = 2, 30, 16384
+
 WORKER_TIMEOUT_S = 120
 JOB_TIMEOUT_S = 100  # app-level job deadline, comfortably below the Lambda timeout
 QUEUE_VISIBILITY_S = 180  # must be >= worker timeout (Lambda enforces it); also bounds retry spacing
@@ -45,9 +52,11 @@ QUEUE_VISIBILITY_S = 180  # must be >= worker timeout (Lambda enforces it); also
 
 class NeerAIStack(Stack):
     def __init__(self, scope: Construct, id: str, *, stage: str, frontend_origin: str, weather_provider: str,
-                 extra_callbacks: list[str], alert_email: str | None, budget_email: str | None, worker_concurrency: int, **kw) -> None:
+                 extra_callbacks: list[str], alert_email: str | None, budget_email: str | None, worker_concurrency: int, demo_mode: bool = False, **kw) -> None:
         super().__init__(scope, id, **kw)
         prod = stage == "prod"
+        if demo_mode and stage != "dev":
+            raise ValueError("demo mode (no sign-in) is allowed only for the dev stage")
         retention = logs.RetentionDays.ONE_MONTH if prod else logs.RetentionDays.TWO_WEEKS
 
         # ───────── data ─────────
@@ -90,11 +99,14 @@ class NeerAIStack(Stack):
             "NEERAI_QUEUE_BACKEND": "sqs", "NEERAI_JOBS_QUEUE_URL": queue.queue_url,
             # Explicit, never defaulted: openmeteo = strict live (outage is reported, never replaced by simulated data).
             "NEERAI_WEATHER_PROVIDER": weather_provider, "NEERAI_AUTO_SEED": "false",
-            "NEERAI_AUTH_MODE": "cognito", "NEERAI_COGNITO_REGION": self.region, "NEERAI_COGNITO_USER_POOL_ID": pool.user_pool_id,
+            "NEERAI_AUTH_MODE": "demo" if demo_mode else "cognito", "NEERAI_STAGE": stage, "NEERAI_COGNITO_REGION": self.region, "NEERAI_COGNITO_USER_POOL_ID": pool.user_pool_id,
             "NEERAI_COGNITO_CLIENT_ID": client.user_pool_client_id, "NEERAI_CORS_ORIGINS": frontend_origin.rstrip("/"),
             "NEERAI_DEMO_DIR": "/var/task/data/demo", "NEERAI_AGENT_TIMEOUT_S": "90",
             "NEERAI_JOB_TIMEOUT_S": str(JOB_TIMEOUT_S), "NEERAI_JOB_MAX_ATTEMPTS": "3",
         }
+        if demo_mode:
+            env.update({"NEERAI_MAX_ACTIVE_JOBS_PER_USER": str(DEMO_MAX_ACTIVE_JOBS), "NEERAI_MAX_JOBS_PER_USER_PER_DAY": str(DEMO_MAX_JOBS_PER_DAY),
+                        "NEERAI_MAX_BODY_BYTES": str(DEMO_MAX_BODY_BYTES)})
         code = _lambda.Code.from_asset(str(BUILD_DIR))  # built by scripts/build_lambda.py (CI) - ZIP, no Docker
 
         api_fn = _lambda.Function(
@@ -123,7 +135,8 @@ class NeerAIStack(Stack):
         jwt = authz.HttpJwtAuthorizer("Cognito", issuer, jwt_audience=[client.user_pool_client_id])
         integration = integ.HttpLambdaIntegration("ApiInt", api_fn)
         api = apigw.HttpApi(
-            self, "HttpApi", default_integration=integration, default_authorizer=jwt, create_default_stage=True,
+            # demo mode: no default authorizer, so $default and every route are unauthenticated (the backend maps them to one demo principal)
+            self, "HttpApi", default_integration=integration, default_authorizer=None if demo_mode else jwt, create_default_stage=True,
             cors_preflight=apigw.CorsPreflightOptions(
                 allow_origins=[frontend_origin.rstrip("/"), *[u.rstrip("/") for u in extra_callbacks]],
                 allow_methods=[apigw.CorsHttpMethod.GET, apigw.CorsHttpMethod.POST, apigw.CorsHttpMethod.PATCH,
@@ -138,9 +151,11 @@ class NeerAIStack(Stack):
         jobs_routes = api.add_routes(path="/api/jobs", methods=[apigw.HttpMethod.POST], integration=integration)
         access_logs = logs.LogGroup(self, "ApiAccessLogs", retention=retention, removal_policy=RemovalPolicy.DESTROY)
         stage_cfn = api.default_stage.node.default_child  # type: ignore[union-attr]
-        stage_cfn.default_route_settings = {"throttlingRateLimit": 20, "throttlingBurstLimit": 40}  # type: ignore[attr-defined]
+        rate, burst = DEMO_THROTTLE if demo_mode else (20, 40)
+        jobs_rate, jobs_burst = DEMO_JOBS_THROTTLE if demo_mode else (3, 6)
+        stage_cfn.default_route_settings = {"throttlingRateLimit": rate, "throttlingBurstLimit": burst}  # type: ignore[attr-defined]
         # route_settings is an untyped map: CloudFormation property names are passed through verbatim (PascalCase)
-        stage_cfn.route_settings = {"POST /api/jobs": {"ThrottlingRateLimit": 3, "ThrottlingBurstLimit": 6}}  # type: ignore[attr-defined]
+        stage_cfn.route_settings = {"POST /api/jobs": {"ThrottlingRateLimit": jobs_rate, "ThrottlingBurstLimit": jobs_burst}}  # type: ignore[attr-defined]
         # API Gateway rejects a stage whose RouteSettings name a route that does not exist yet, and CDK adds no ordering.
         for route in jobs_routes:
             stage_cfn.add_dependency(route.node.default_child)  # type: ignore[arg-type]
@@ -222,6 +237,7 @@ class NeerAIStack(Stack):
         CfnOutput(self, "TableName", value=table.table_name)
         CfnOutput(self, "AlarmTopicArn", value=topic.topic_arn)
         CfnOutput(self, "Issuer", value=issuer)
+        CfnOutput(self, "AuthMode", value="demo" if demo_mode else "cognito", description="demo = NO SIGN-IN (dev only)")
 
 
 def main() -> None:
@@ -239,6 +255,12 @@ def main() -> None:
     weather = str(ctx("weatherProvider") or "openmeteo")
     if weather not in ("openmeteo", "auto", "mock"):
         raise SystemExit("weatherProvider must be openmeteo, auto or mock")
+    demo_raw = str(ctx("demoMode") or "").strip().lower()
+    if demo_raw not in ("", "true", "false"):  # a typo must never be read as "enable" or silently as "disable"
+        raise SystemExit(f"demoMode must be 'true' or 'false' (or unset), got {demo_raw!r}")
+    demo_mode = demo_raw == "true"
+    if demo_mode and stage != "dev":
+        raise SystemExit("demoMode (unauthenticated API) is allowed only with stage=dev")
     budget_email = str(ctx("budgetEmail") or "") if str(ctx("createBudget") or "").lower() == "true" else None
     if str(ctx("createBudget") or "").lower() == "true" and not budget_email:
         raise SystemExit("createBudget=true needs -c budgetEmail=<address>")
@@ -248,7 +270,7 @@ def main() -> None:
     stack = NeerAIStack(
         app, f"NeerAI-{stage.capitalize()}", stage=stage, frontend_origin=origin, weather_provider=weather, extra_callbacks=extra,
         alert_email=str(ctx("alertEmail") or "") or None, budget_email=budget_email,
-        worker_concurrency=int(ctx("workerConcurrency") or 3),
+        worker_concurrency=int(ctx("workerConcurrency") or 3), demo_mode=demo_mode,
         env=cdk.Environment(account=os.environ.get("CDK_DEFAULT_ACCOUNT"), region=region),
         description="NeerAI serverless backend (API Gateway, Lambda, SQS, DynamoDB, Cognito)")
     for k, v in {"Project": "NeerAI", "Environment": stage, "ManagedBy": "CDK"}.items():

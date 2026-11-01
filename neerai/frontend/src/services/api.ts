@@ -3,7 +3,7 @@ import type {
   ScenarioComparison, ScenarioParams, PlanRecordLite,
 } from '../types/api'
 
-import { authEnabled, getAccessToken } from './auth'
+import { authEnabled, getAccessToken, login } from './auth'
 
 const BASE = ((import.meta.env.VITE_API_URL as string | undefined) ?? '').replace(/\/$/, '')
 
@@ -31,7 +31,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (res.status === 401 && authEnabled) {
     res = await send().catch(() => res) // one retry: getAccessToken() refreshes an expired token
-    if (res.status === 401) throw new ApiError(401, 'Sign-in required: this action needs a Cognito session (demo mode has no sign-in page).')
+    if (res.status === 401) {
+      void login() // session is gone: back to the hosted sign-in page
+      throw new ApiError(401, 'Your session has expired. Redirecting to sign in…')
+    }
   }
   if (!res.ok) {
     let detail = res.statusText

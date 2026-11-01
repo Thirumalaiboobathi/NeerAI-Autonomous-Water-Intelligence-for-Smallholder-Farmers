@@ -28,7 +28,7 @@ jobs:
     env:
       AWS_REGION: ap-south-1
       STACK: NeerAI-${{ inputs.stage == 'prod' && 'Prod' || 'Dev' }}
-      CDK_CTX: -c stage=${{ inputs.stage }} -c frontendOrigin=${{ vars.FRONTEND_ORIGIN }} -c alertEmail=${{ vars.ALERT_EMAIL }}
+      CDK_CTX: -c stage=${{ inputs.stage }} -c frontendOrigin=${{ vars.FRONTEND_ORIGIN }} -c alertEmail=${{ vars.ALERT_EMAIL }} -c demoMode=${{ vars.DEMO_MODE }}
     steps:
       - name: Deploy only from main
         run: |
@@ -62,6 +62,11 @@ jobs:
         run: |
           pip install -r requirements.txt
           npm install --no-save aws-cdk@2
+      - name: Template policy checks (auth mode, throttles, IAM) on the exact context being deployed
+        working-directory: neerai/infrastructure/cdk
+        run: |
+          npx cdk synth "$STACK" $CDK_CTX --quiet
+          python check_template.py "cdk.out/$STACK.template.json"
       - name: cdk diff
         working-directory: neerai/infrastructure/cdk
         run: npx cdk diff "$STACK" $CDK_CTX

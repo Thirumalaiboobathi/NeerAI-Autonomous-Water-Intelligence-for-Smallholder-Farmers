@@ -2,7 +2,7 @@
 """Post-deployment smoke test (stdlib only). Usage:
   python scripts/smoke_test.py https://<api-id>.execute-api.ap-south-1.amazonaws.com [--token <cognito access token>]
 
-Without a token it checks the public/unauthenticated surface only. With a token it also runs the real flow:
+Without a token it checks the public/unauthenticated surface only (a demo-mode dev API, auth_mode "demo", needs no token). With a token it also runs the real flow:
 load demo farm -> submit agent job -> poll to a terminal state -> check the answer and weather labelling.
 Exit code 0 only if every executed check passed; skipped checks are printed as SKIP, never as PASS.
 """
@@ -45,7 +45,7 @@ def check(name, ok, detail=""):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("base")
-    ap.add_argument("--token")
+    ap.add_argument("--token")  # not needed in demo mode
     a = ap.parse_args()
     base = a.base.rstrip("/")
 
@@ -54,20 +54,25 @@ def main():
     s, b = call(base, "GET", "/health/ready")
     check("readiness (repository reachable)", s == 200 and b.get("status") == "ready", (s, b))
     s, b = call(base, "GET", "/api/health")
-    check("api health reports aws env, bedrock, cognito",
-          s == 200 and b.get("env") == "aws" and b.get("agent_mode") == "bedrock" and b.get("auth_mode") == "cognito", (s, b))
-    print(f"INFO  weather_provider={b.get('weather_provider') if isinstance(b, dict) else '?'}")
-    s, _ = call(base, "GET", "/api/farms")
-    check("unauthenticated request rejected (401)", s == 401, s)
-    s, _ = call(base, "GET", "/api/farms", token="not.a.valid.token")
-    check("garbage token rejected (401)", s == 401, s)
-    s, _ = call(base, "POST", "/api/jobs", body={"farm_id": "x", "query": "hi"})
-    check("unauthenticated job submit rejected", s == 401, s)
+    mode = b.get("auth_mode") if isinstance(b, dict) else None
+    check("api health reports aws env, bedrock, cognito or demo",
+          s == 200 and b.get("env") == "aws" and b.get("agent_mode") == "bedrock" and mode in ("cognito", "demo"), (s, b))
+    print(f"INFO  weather_provider={b.get('weather_provider') if isinstance(b, dict) else '?'}  auth_mode={mode}")
+    demo = mode == "demo"
+    if demo:
+        print("WARN  auth_mode=demo: this API is UNAUTHENTICATED (dev demo only); the Cognito rejection checks do not apply")
+    else:
+        s, _ = call(base, "GET", "/api/farms")
+        check("unauthenticated request rejected (401)", s == 401, s)
+        s, _ = call(base, "GET", "/api/farms", token="not.a.valid.token")
+        check("garbage token rejected (401)", s == 401, s)
+        s, _ = call(base, "POST", "/api/jobs", body={"farm_id": "x", "query": "hi"})
+        check("unauthenticated job submit rejected", s == 401, s)
 
-    if not a.token:
+    if not a.token and not demo:
         print("SKIP  authenticated flow (pass --token <access token>)")
     else:
-        t = a.token
+        t = a.token  # None in demo mode: requests carry no Authorization header
         s, farm = call(base, "POST", "/api/demo/load?key=madurai", t, {})
         check("load synthetic demo farm", s in (200, 201) and "id" in farm, (s, farm))
         if s in (200, 201):

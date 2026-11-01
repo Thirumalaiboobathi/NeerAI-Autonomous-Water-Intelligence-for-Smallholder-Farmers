@@ -17,6 +17,9 @@ from .config import Settings
 log = logging.getLogger("neerai.auth")
 
 LOCAL_USER = "local"
+# The single identity behind unauthenticated demo mode. Cognito `sub` values are UUIDs, so this can never equal a real
+# user id: demo data is structurally separate from real users' records (the owner is part of every storage key).
+DEMO_USER = "demo-public"
 
 
 @dataclass(frozen=True)
@@ -60,6 +63,8 @@ def current_principal(request: Request) -> Principal:
     st = request.app.state.neerai
     if st.settings.auth_mode == "none":
         return Principal(LOCAL_USER)
+    if st.settings.auth_mode == "demo":
+        return Principal(DEMO_USER)  # any Authorization header, user id header or body field is ignored
     header = request.headers.get("authorization", "")
     scheme, _, token = header.partition(" ")
     if scheme.lower() != "bearer" or not token:

@@ -10,6 +10,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
+import AuthGate from './components/AuthGate'
 import App from './app/App'
 import { AppStateProvider } from './app/AppState'
 import { theme } from './app/theme'
@@ -22,10 +23,11 @@ createRoot(document.getElementById('root')!).render(
       <AppStateProvider>
         <ThemeProvider theme={theme}>
           <CssBaseline />
-          {/* Demo: no sign-in wall. Protected API calls still need a Cognito token and return 401 without one. */}
-          <BrowserRouter>
-            <App />
-          </BrowserRouter>
+          <AuthGate>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+          </AuthGate>
         </ThemeProvider>
       </AppStateProvider>
     </QueryClientProvider>

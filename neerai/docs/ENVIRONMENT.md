@@ -11,7 +11,8 @@ Backend settings use the `NEERAI_` prefix (`neerai/.env.example` lists all of th
 | `NEERAI_BEDROCK_MAX_ATTEMPTS` | 3 | 3 | botocore standard mode = exponential backoff + jitter |
 | `NEERAI_WEATHER_PROVIDER` | `mock` | `openmeteo` (CDK context `weatherProvider`) | must be set explicitly in `aws` env |
 | `NEERAI_REPOSITORY` / `_DYNAMODB_TABLE` / `_AWS_REGION` | `sql` | `dynamodb` / table name / region | |
-| `NEERAI_AUTH_MODE`, `_COGNITO_REGION`, `_COGNITO_USER_POOL_ID`, `_COGNITO_CLIENT_ID` | `none` | `cognito` + ids | |
+| `NEERAI_AUTH_MODE`, `_COGNITO_REGION`, `_COGNITO_USER_POOL_ID`, `_COGNITO_CLIENT_ID` | `none` | `cognito` + ids | `demo` = no sign-in, dev stage only: see [DEMO_MODE.md](DEMO_MODE.md) |
+| `NEERAI_STAGE` | unset | `dev` / `prod` (CDK) | demo auth is refused unless `dev` |
 | `NEERAI_QUEUE_BACKEND`, `_JOBS_QUEUE_URL` | `inline` | `sqs` + url | inline runs jobs in a local thread |
 | `NEERAI_JOB_TIMEOUT_S`, `_JOB_MAX_ATTEMPTS`, `_JOB_TTL_DAYS` | 100, 3, 7 | same | keep job timeout < worker Lambda timeout (120 s) < queue visibility (180 s) |
 | `NEERAI_MAX_ACTIVE_JOBS_PER_USER`, `_MAX_JOBS_PER_USER_PER_DAY` | 2, 40 | same | cost control |
@@ -26,7 +27,7 @@ Backend settings use the `NEERAI_` prefix (`neerai/.env.example` lists all of th
 `VITE_API_URL` (CDK output `ApiUrl`), `VITE_COGNITO_DOMAIN` (`CognitoDomain`), `VITE_COGNITO_CLIENT_ID` (`UserPoolClientId`). If the Cognito pair is unset, the app runs without sign-in (local demo).
 
 ## CDK context
-`stage`, `frontendOrigin` (required), `weatherProvider`, `workerConcurrency`, `alertEmail`, `extraCallbackUrls`, `createBudget`, `budgetEmail`, `allowOtherRegion`.
+`stage`, `frontendOrigin` (required), `demoMode` (`true`/`false`; dev only), `weatherProvider`, `workerConcurrency`, `alertEmail`, `extraCallbackUrls`, `createBudget`, `budgetEmail`, `allowOtherRegion`.
 
 ## GitHub (per environment `dev`/`prod`, variables not secrets)
 `AWS_ACCOUNT_ID`, `FRONTEND_ORIGIN`, `ALERT_EMAIL`. (The deploy role ARN is derived: `neerai-github-deploy-<stage>`.)

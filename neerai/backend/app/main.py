@@ -69,6 +69,8 @@ def create_app(settings: Settings | None = None, repository=None, verifier=None,
     st = AppState(settings=settings, store=store, weather=weather)
     if settings.auth_mode == "cognito":
         st.verifier = verifier or CognitoVerifier(settings)
+    elif settings.auth_mode == "demo":
+        log.warning("DEMO MODE: no authentication; every request is the shared principal 'demo-public' (stage=%s)", settings.stage or "-")
     if queue is None:
         queue = SqsQueue(settings.jobs_queue_url, settings.aws_region) if settings.queue_backend == "sqs" else None
     if queue is None:  # inline: same processor the worker uses, run in a background thread
